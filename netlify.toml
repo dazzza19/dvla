@@ -1,9 +1,9 @@
 [build]
-  command = "npm install"
-  publish = "."
+  # Remove custom command to let Netlify auto-detect
+  # This will automatically run npm install
 
 [build.environment]
-  # Your environment variables
+  NODE_VERSION = "18"
 
 [[redirects]]
   from = "/api/*"
