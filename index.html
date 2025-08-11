@@ -342,7 +342,7 @@
                             <label for="dvlaApiKey">DVLA API Key:</label>
                             <input type="password" id="dvlaApiKey" placeholder="Enter your DVLA API key">
                             <small style="color: #666; margin-top: 5px; display: block;">
-                                Get your API key from: <a href="https://developer-portal.driver-vehicle-licensing.api.gov.uk/" target="_blank">DVLA Developer Portal</a>
+                                Get your API key from: <a href="https://developer-portal.driver-vehicle-licensing.api.gov.uk" target="_blank">DVLA Developer Portal</a>
                             </small>
                         </div>
                         <button class="btn" onclick="saveDvlaApiKey()">Save API Key</button>
@@ -449,7 +449,7 @@
             },
             'warning light': {
                 causes: ['Engine management fault', 'Emissions system fault', 'Sensor malfunction', 'Low fluid levels', 'Electrical fault'],
-                solutions: ['OBD diagnostic scan (£30-80)', 'Check and top up fluids (£10-30)', 'Replace faulty sensors (£50-300)', 'Repair wiring issues (£80-400)', 'ECU reset or reprogramming (£100-500)'],
+                solutions: ['OBD diagnostic scan (£30-80)', 'Check and top up fluids (£100-30)', 'Replace faulty sensors (£50-300)', 'Repair wiring issues (£80-400)', 'ECU reset or reprogramming (£100-500)'],
                 severity: 'Variable',
                 urgency: 'Depends on warning light - check manual'
             },
@@ -526,17 +526,28 @@
             vehicleInfoDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Looking up vehicle information...</div>';
             
             try {
-                // Real DVLA API call
-                const response = await fetch(`${dvlaApiUrl}/vehicle-enquiry/v1/vehicles`, {
+                // Real DVLA API call - note: the actual DVLA API requires authentication
+                const response = await fetch(dvlaApiUrl + '/vehicle-enquiry/v1/vehicles', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-api-key': dvlaApiKey
+                        'x-api-key': dvlaApiKey,
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify({
                         registrationNumber: registration
                     })
                 });
+                
+                if (response.status === 401) {
+                    vehicleInfoDiv.innerHTML = '<div class="error">Authentication failed. Please check your API key and ensure you have access to the DVLA API.</div>';
+                    return;
+                }
+                
+                if (response.status === 403) {
+                    vehicleInfoDiv.innerHTML = '<div class="error">Access forbidden. You may need to complete the onboarding process for the DVLA Secure API.</div>';
+                    return;
+                }
                 
                 if (response.ok) {
                     const vehicleData = await response.json();
@@ -551,16 +562,17 @@
                             <p><strong>Color:</strong> ${vehicleData.colour || 'N/A'}</p>
                             <p><strong>MOT Expiry:</strong> ${vehicleData.motExpiryDate || 'N/A'}</p>
                             <p><strong>Tax Status:</strong> ${vehicleData.taxStatus || 'N/A'}</p>
-                            <button class="btn" onclick="populateFromLookup('${vehicleData.make}', '${vehicleData.model}', '${vehicleData.yearOfManufacture}')">Use for Diagnostics</button>
+                            <button class="btn" onclick="populateFromLookup('${vehicleData.make || ''}', '${vehicleData.model || ''}', '${vehicleData.yearOfManufacture || ''}')">Use for Diagnostics</button>
                         </div>
                     `;
                 } else if (response.status === 404) {
                     vehicleInfoDiv.innerHTML = '<div class="error">Vehicle not found. Please check the registration number.</div>';
                 } else {
-                    throw new Error(`API Error: ${response.status}`);
+                    throw new Error(`API Error: ${response.status} - ${response.statusText}`);
                 }
             } catch (error) {
-                vehicleInfoDiv.innerHTML = `<div class="error">Error looking up vehicle: ${error.message}. Please check your API key and try again.</div>`;
+                console.error('Error:', error);
+                vehicleInfoDiv.innerHTML = `<div class="error">Error looking up vehicle: ${error.message}. The DVLA API may require additional authentication steps.</div>`;
             }
         }
 
@@ -658,17 +670,7 @@
             searchResultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Searching for repair information...</div>';
             
             try {
-                // Using a CORS proxy service to search (alternative approach since DuckDuckGo doesn't have API)
-                const proxyUrl = 'https://api.allorigins.win/raw?url=';
-                const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query + ' car repair tutorial')}`;
-                
-                // Note: This is a simplified approach. In production, you might want to use:
-                // 1. A custom backend that scrapes search results
-                // 2. Google Custom Search API
-                // 3. Bing Search API
-                // 4. Or integrate directly with YouTube API for video results
-                
-                // For demonstration, we'll show structured results based on the query
+                // Generate relevant search results based on query content
                 const mockResults = generateSearchResults(query);
                 
                 setTimeout(() => {
@@ -763,17 +765,6 @@
             
             console.log('Virtual Mechanic Tool Loaded');
         });
-
-        /* 
-        FOR NETLIFY/GITHUB DEPLOYMENT:
-        Add these environment variables to your build settings:
-        
-        DVLA_API_KEY=your_actual_api_key_here
-        DVLA_API_URL=https://driver-vehicle-licensing.api.gov.uk
-        
-        Then modify your build process to inject them into the HTML:
-        
-        1. Create a build script that replaces placeholders in this HTML
-        2. Or use Netlify Functions to handle API calls server-side
-        3. Example: Replace 'DVLA_API_KEY_PLACEHOLDER' with process.env.DVLA_API_KEY
-        */
+    </script>
+</body>
+</html>
