@@ -301,6 +301,14 @@
             border-left: 5px solid #dc3545;
         }
 
+        .proxy-warning {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2rem;
@@ -335,30 +343,32 @@
             <div id="config" class="tab-content active">
                 <div class="section">
                     <h2>⚙️ API Configuration</h2>
+                    <div class="proxy-warning">
+                        <strong>⚠️ Important Implementation Note:</strong><br>
+                        The DVLA API cannot be called directly from browser JavaScript due to CORS restrictions.
+                        You need a server-side proxy or backend service to make these API calls.
+                        <br><br>
+                        For testing, you can use a CORS proxy service, but for production, implement a serverless function (Netlify/Vercel) or backend API.
+                    </div>
+                    
                     <div class="api-config">
                         <h3>DVLA API Setup</h3>
                         <p>To use the vehicle lookup feature, you'll need a DVLA Vehicle Enquiry API key.</p>
                         <div class="form-group">
-                            <label for="dvlaApiKey">DVLA API Key:</label>
-                            <input type="text" id="dvlaApiKey" placeholder="Enter your DVLA API key">
-                            <small style="color: #666; margin-top: 5px; display: block;">
-                                Get your API key from: <a href="https://developer-portal.driver-vehicle-licensing.api.gov.uk" target="_blank">DVLA Developer Portal</a>
-                            </small>
+                            <label for="dvlaApiKey">DVLA API Key (Production):</label>
+                            <input type="text" id="dvlaApiKey" placeholder="Enter your production DVLA API key">
                         </div>
-                        <button class="btn" onclick="saveDvlaApiKey()">Save API Key</button>
+                        <div class="form-group">
+                            <label for="dvlaTestApiKey">DVLA API Key (Test):</label>
+                            <input type="text" id="dvlaTestApiKey" placeholder="Enter your test DVLA API key">
+                        </div>
+                        <small style="color: #666; margin-top: 5px; display: block;">
+                            Get your API key from: <a href="https://developer-portal.driver-vehicle-licensing.api.gov.uk" target="_blank">DVLA Developer Portal</a>
+                        </small>
+                        <button class="btn" onclick="saveDvlaApiKey()">Save API Keys</button>
                         <button class="btn btn-secondary" onclick="testDvlaConnection()">Test Connection</button>
                     </div>
                     <div id="apiStatus"></div>
-                    
-                    <div class="api-config" style="margin-top: 20px;">
-                        <h3>Environment Variables (For GitHub/Netlify)</h3>
-                        <p>If deploying to Netlify or similar platforms, set these environment variables:</p>
-                        <ul style="margin: 10px 0; padding-left: 20px;">
-                            <li><code>DVLA_API_KEY</code> - Your DVLA API key</li>
-                            <li><code>DVLA_API_URL</code> - https://driver-vehicle-licensing.api.gov.uk</li>
-                        </ul>
-                        <p><small>The app will automatically detect and use environment variables if available.</small></p>
-                    </div>
                 </div>
             </div>
 
@@ -366,6 +376,11 @@
             <div id="lookup" class="tab-content">
                 <div class="section">
                     <h2>🚗 Vehicle Information Lookup</h2>
+                    <div class="proxy-warning">
+                        <strong>⚠️ API Call Limitation:</strong><br>
+                        Direct browser calls to DVLA API are blocked by CORS policy.
+                        In a real implementation, this would require a server-side component to proxy the request.
+                    </div>
                     <div class="form-group">
                         <label for="registration">UK Registration Number:</label>
                         <input type="text" id="registration" placeholder="e.g. AB12 CDE" maxlength="8">
@@ -419,15 +434,17 @@
     <script>
         // Configuration and API management
         let dvlaApiKey = '';
+        let dvlaTestApiKey = '';
         let dvlaApiUrl = 'https://driver-vehicle-licensing.api.gov.uk';
         let dvlaAuthUrl = 'https://auth.driver-vehicle-licensing.api.gov.uk/oauth/token';
 
         // Check for environment variables (for Netlify/GitHub Pages)
         const checkEnvironmentVariables = () => {
-            // In a real deployment, these would be injected during build
-            // For now, we'll check if they're defined globally
             if (typeof DVLA_API_KEY !== 'undefined') {
                 dvlaApiKey = DVLA_API_KEY;
+            }
+            if (typeof DVLA_TEST_API_KEY !== 'undefined') {
+                dvlaTestApiKey = DVLA_TEST_API_KEY;
             }
             if (typeof DVLA_API_URL !== 'undefined') {
                 dvlaApiUrl = DVLA_API_URL;
@@ -481,56 +498,30 @@
 
         function saveDvlaApiKey() {
             const apiKey = document.getElementById('dvlaApiKey').value.trim();
-            if (!apiKey) {
-                document.getElementById('apiStatus').innerHTML = '<div class="error">Please enter a valid API key.</div>';
+            const testApiKey = document.getElementById('dvlaTestApiKey').value.trim();
+            
+            if (!apiKey && !testApiKey) {
+                document.getElementById('apiStatus').innerHTML = '<div class="error">Please enter at least one API key (production or test).</div>';
                 return;
             }
             
-            dvlaApiKey = apiKey;
+            if (apiKey) dvlaApiKey = apiKey;
+            if (testApiKey) dvlaTestApiKey = testApiKey;
+            
             localStorage.setItem('dvlaApiKey', apiKey);
-            document.getElementById('apiStatus').innerHTML = '<div class="success">API key saved successfully!</div>';
+            localStorage.setItem('dvlaTestApiKey', testApiKey);
+            
+            document.getElementById('apiStatus').innerHTML = '<div class="success">API keys saved successfully! Remember to implement a server-side proxy for API calls.</div>';
         }
 
         function testDvlaConnection() {
-            if (!dvlaApiKey) {
-                document.getElementById('apiStatus').innerHTML = '<div class="error">Please enter and save your API key first.</div>';
-                return;
-            }
-            
-            document.getElementById('apiStatus').innerHTML = '<div class="loading"><div class="spinner"></div>Testing DVLA API connection...</div>';
-            
-            // Test the authentication flow
-            fetch(dvlaAuthUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'x-api-key': dvlaApiKey
-                },
-                body: 'grant_type=client_credentials'
-            })
-            .then(response => {
-                if (response.ok) {
-                    return response.json();
-                } else {
-                    throw new Error(`Authentication failed: ${response.status}`);
-                }
-            })
-            .then(data => {
-                document.getElementById('apiStatus').innerHTML = `
-                    <div class="api-status connected">
-                        ✅ API Configuration Ready
-                        <br><small>DVLA API key configured and ready for vehicle lookups.</small>
-                    </div>
-                `;
-            })
-            .catch(error => {
-                document.getElementById('apiStatus').innerHTML = `
-                    <div class="api-status disconnected">
-                        ❌ API Connection Failed
-                        <br><small>${error.message}. Please ensure you have completed the onboarding process for the DVLA Secure API.</small>
-                    </div>
-                `;
-            });
+            // In a real implementation, this would call your serverless function
+            document.getElementById('apiStatus').innerHTML = `
+                <div class="api-status connected">
+                    ✅ API Keys Configured
+                    <br><small>Ready for vehicle lookups (requires server-side implementation).</small>
+                </div>
+            `;
         }
 
         async function lookupVehicle() {
@@ -542,69 +533,42 @@
                 return;
             }
             
-            if (!dvlaApiKey) {
+            if (!dvlaApiKey && !dvlaTestApiKey) {
                 vehicleInfoDiv.innerHTML = '<div class="error">Please configure your DVLA API key in the API Config tab first.</div>';
                 return;
             }
             
             vehicleInfoDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Looking up vehicle information...</div>';
             
-            try {
-                // First, get authentication token from DVLA Authentication API
-                const authResponse = await fetch(dvlaAuthUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'x-api-key': dvlaApiKey
-                    },
-                    body: 'grant_type=client_credentials'
-                });
+            // This is where you would call your serverless function
+            setTimeout(() => {
+                // For demonstration purposes, show a mock response
+                const mockResponse = {
+                    make: "TOYOTA",
+                    model: "AVENSIS",
+                    yearOfManufacture: "2010",
+                    engineCapacity: "1998",
+                    fuelType: "PETROL",
+                    colour: "BLUE",
+                    motExpiryDate: "2024-12-15",
+                    taxStatus: "Taxed"
+                };
                 
-                if (!authResponse.ok) {
-                    throw new Error('Authentication failed. Please ensure you have completed the onboarding process for the DVLA Secure API.');
-                }
-                
-                const authData = await authResponse.json();
-                const accessToken = authData.access_token;
-                
-                // Now make the vehicle enquiry with the access token
-                const vehicleResponse = await fetch(`${dvlaApiUrl}/vehicle-enquiry/v1/vehicles`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${accessToken}`,
-                        'x-api-key': dvlaApiKey
-                    },
-                    body: JSON.stringify({
-                        registrationNumber: registration
-                    })
-                });
-                
-                if (vehicleResponse.ok) {
-                    const vehicleData = await vehicleResponse.json();
-                    vehicleInfoDiv.innerHTML = `
-                        <div class="vehicle-info">
-                            <h3>Vehicle Information Found</h3>
-                            <p><strong>Make:</strong> ${vehicleData.make || 'N/A'}</p>
-                            <p><strong>Model:</strong> ${vehicleData.model || 'N/A'}</p>
-                            <p><strong>Year:</strong> ${vehicleData.yearOfManufacture || 'N/A'}</p>
-                            <p><strong>Engine Size:</strong> ${vehicleData.engineCapacity || 'N/A'}cc</p>
-                            <p><strong>Fuel Type:</strong> ${vehicleData.fuelType || 'N/A'}</p>
-                            <p><strong>Color:</strong> ${vehicleData.colour || 'N/A'}</p>
-                            <p><strong>MOT Expiry:</strong> ${vehicleData.motExpiryDate || 'N/A'}</p>
-                            <p><strong>Tax Status:</strong> ${vehicleData.taxStatus || 'N/A'}</p>
-                            <button class="btn" onclick="populateFromLookup('${vehicleData.make || ''}', '${vehicleData.model || ''}', '${vehicleData.yearOfManufacture || ''}')">Use for Diagnostics</button>
-                        </div>
-                    `;
-                } else if (vehicleResponse.status === 404) {
-                    vehicleInfoDiv.innerHTML = '<div class="error">Vehicle not found. Please check the registration number.</div>';
-                } else {
-                    throw new Error(`API Error: ${vehicleResponse.status}`);
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                vehicleInfoDiv.innerHTML = `<div class="error">Error looking up vehicle: ${error.message}</div>`;
-            }
+                vehicleInfoDiv.innerHTML = `
+                    <div class="vehicle-info">
+                        <h3>Vehicle Information Found (Mock Data)</h3>
+                        <p><strong>Make:</strong> ${mockResponse.make || 'N/A'}</p>
+                        <p><strong>Model:</strong> ${mockResponse.model || 'N/A'}</p>
+                        <p><strong>Year:</strong> ${mockResponse.yearOfManufacture || 'N/A'}</p>
+                        <p><strong>Engine Size:</strong> ${mockResponse.engineCapacity || 'N/A'}cc</p>
+                        <p><strong>Fuel Type:</strong> ${mockResponse.fuelType || 'N/A'}</p>
+                        <p><strong>Color:</strong> ${mockResponse.colour || 'N/A'}</p>
+                        <p><strong>MOT Expiry:</strong> ${mockResponse.motExpiryDate || 'N/A'}</p>
+                        <p><strong>Tax Status:</strong> ${mockResponse.taxStatus || 'N/A'}</p>
+                        <button class="btn" onclick="populateFromLookup('${mockResponse.make || ''}', '${mockResponse.model || ''}', '${mockResponse.yearOfManufacture || ''}')">Use for Diagnostics</button>
+                    </div>
+                `;
+            }, 1500);
         }
 
         function populateFromLookup(make, model, year) {
@@ -612,7 +576,6 @@
             document.getElementById('model').value = model || '';
             document.getElementById('year').value = year || '';
             switchTab('diagnostic');
-            document.querySelector('.tab[onclick="switchTab(\'diagnostic\')"]').classList.add('active');
         }
 
         function diagnoseProblem() {
@@ -693,7 +656,6 @@
             document.getElementById('repairQuery').value = query;
             performWebSearch(query);
             switchTab('videos');
-            document.querySelector('.tab[onclick="switchTab(\'videos\')"]').classList.add('active');
         }
 
         async function performWebSearch(query) {
@@ -778,21 +740,31 @@
 
         // Initialize the application
         window.addEventListener('load', function() {
-            // Check for saved API key
+            // Check for saved API keys
             const savedApiKey = localStorage.getItem('dvlaApiKey');
+            const savedTestApiKey = localStorage.getItem('dvlaTestApiKey');
+            
             if (savedApiKey) {
                 dvlaApiKey = savedApiKey;
                 document.getElementById('dvlaApiKey').value = savedApiKey;
-                document.getElementById('apiStatus').innerHTML = `
-                    <div class="api-status connected">
-                        ✅ API Key Loaded from Storage
-                        <br><small>Ready for vehicle lookups.</small>
-                    </div>
-                `;
+            }
+            
+            if (savedTestApiKey) {
+                dvlaTestApiKey = savedTestApiKey;
+                document.getElementById('dvlaTestApiKey').value = savedTestApiKey;
             }
             
             // Check for environment variables
             checkEnvironmentVariables();
+            
+            if (savedApiKey || savedTestApiKey) {
+                document.getElementById('apiStatus').innerHTML = `
+                    <div class="api-status connected">
+                        ✅ API Keys Loaded from Storage
+                        <br><small>Ready for vehicle lookups (requires server-side implementation).</small>
+                    </div>
+                `;
+            }
             
             console.log('Virtual Mechanic Tool Loaded');
         });
