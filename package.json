@@ -1,0 +1,16 @@
+{
+  "name": "virtual-mechanic",
+  "version": "1.0.0",
+  "description": "Vehicle diagnostic tool with DVLA API integration",
+  "main": "index.html",
+  "scripts": {
+    "start": "echo 'Run in Netlify environment'",
+    "build": "echo 'Build complete'"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
