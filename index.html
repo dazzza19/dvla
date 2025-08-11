@@ -340,7 +340,7 @@
                         <p>To use the vehicle lookup feature, you'll need a DVLA Vehicle Enquiry API key.</p>
                         <div class="form-group">
                             <label for="dvlaApiKey">DVLA API Key:</label>
-                            <input type="password" id="dvlaApiKey" placeholder="Enter your DVLA API key">
+                            <input type="text" id="dvlaApiKey" placeholder="Enter your DVLA API key">
                             <small style="color: #666; margin-top: 5px; display: block;">
                                 Get your API key from: <a href="https://developer-portal.driver-vehicle-licensing.api.gov.uk" target="_blank">DVLA Developer Portal</a>
                             </small>
@@ -420,6 +420,7 @@
         // Configuration and API management
         let dvlaApiKey = '';
         let dvlaApiUrl = 'https://driver-vehicle-licensing.api.gov.uk';
+        let dvlaAuthUrl = 'https://auth.driver-vehicle-licensing.api.gov.uk/oauth/token';
 
         // Check for environment variables (for Netlify/GitHub Pages)
         const checkEnvironmentVariables = () => {
@@ -449,7 +450,7 @@
             },
             'warning light': {
                 causes: ['Engine management fault', 'Emissions system fault', 'Sensor malfunction', 'Low fluid levels', 'Electrical fault'],
-                solutions: ['OBD diagnostic scan (£30-80)', 'Check and top up fluids (£100-30)', 'Replace faulty sensors (£50-300)', 'Repair wiring issues (£80-400)', 'ECU reset or reprogramming (£100-500)'],
+                solutions: ['OBD diagnostic scan (£30-80)', 'Check and top up fluids (£10-30)', 'Replace faulty sensors (£50-300)', 'Repair wiring issues (£80-400)', 'ECU reset or reprogramming (£100-500)'],
                 severity: 'Variable',
                 urgency: 'Depends on warning light - check manual'
             },
@@ -498,15 +499,38 @@
             
             document.getElementById('apiStatus').innerHTML = '<div class="loading"><div class="spinner"></div>Testing DVLA API connection...</div>';
             
-            // Test with a basic API call
-            setTimeout(() => {
+            // Test the authentication flow
+            fetch(dvlaAuthUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'x-api-key': dvlaApiKey
+                },
+                body: 'grant_type=client_credentials'
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error(`Authentication failed: ${response.status}`);
+                }
+            })
+            .then(data => {
                 document.getElementById('apiStatus').innerHTML = `
                     <div class="api-status connected">
                         ✅ API Configuration Ready
                         <br><small>DVLA API key configured and ready for vehicle lookups.</small>
                     </div>
                 `;
-            }, 1500);
+            })
+            .catch(error => {
+                document.getElementById('apiStatus').innerHTML = `
+                    <div class="api-status disconnected">
+                        ❌ API Connection Failed
+                        <br><small>${error.message}. Please ensure you have completed the onboarding process for the DVLA Secure API.</small>
+                    </div>
+                `;
+            });
         }
 
         async function lookupVehicle() {
@@ -526,31 +550,38 @@
             vehicleInfoDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Looking up vehicle information...</div>';
             
             try {
-                // Real DVLA API call - note: the actual DVLA API requires authentication
-                const response = await fetch(dvlaApiUrl + '/vehicle-enquiry/v1/vehicles', {
+                // First, get authentication token from DVLA Authentication API
+                const authResponse = await fetch(dvlaAuthUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'x-api-key': dvlaApiKey
+                    },
+                    body: 'grant_type=client_credentials'
+                });
+                
+                if (!authResponse.ok) {
+                    throw new Error('Authentication failed. Please ensure you have completed the onboarding process for the DVLA Secure API.');
+                }
+                
+                const authData = await authResponse.json();
+                const accessToken = authData.access_token;
+                
+                // Now make the vehicle enquiry with the access token
+                const vehicleResponse = await fetch(`${dvlaApiUrl}/vehicle-enquiry/v1/vehicles`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-api-key': dvlaApiKey,
-                        'Accept': 'application/json'
+                        'Authorization': `Bearer ${accessToken}`,
+                        'x-api-key': dvlaApiKey
                     },
                     body: JSON.stringify({
                         registrationNumber: registration
                     })
                 });
                 
-                if (response.status === 401) {
-                    vehicleInfoDiv.innerHTML = '<div class="error">Authentication failed. Please check your API key and ensure you have access to the DVLA API.</div>';
-                    return;
-                }
-                
-                if (response.status === 403) {
-                    vehicleInfoDiv.innerHTML = '<div class="error">Access forbidden. You may need to complete the onboarding process for the DVLA Secure API.</div>';
-                    return;
-                }
-                
-                if (response.ok) {
-                    const vehicleData = await response.json();
+                if (vehicleResponse.ok) {
+                    const vehicleData = await vehicleResponse.json();
                     vehicleInfoDiv.innerHTML = `
                         <div class="vehicle-info">
                             <h3>Vehicle Information Found</h3>
@@ -565,14 +596,14 @@
                             <button class="btn" onclick="populateFromLookup('${vehicleData.make || ''}', '${vehicleData.model || ''}', '${vehicleData.yearOfManufacture || ''}')">Use for Diagnostics</button>
                         </div>
                     `;
-                } else if (response.status === 404) {
+                } else if (vehicleResponse.status === 404) {
                     vehicleInfoDiv.innerHTML = '<div class="error">Vehicle not found. Please check the registration number.</div>';
                 } else {
-                    throw new Error(`API Error: ${response.status} - ${response.statusText}`);
+                    throw new Error(`API Error: ${vehicleResponse.status}`);
                 }
             } catch (error) {
                 console.error('Error:', error);
-                vehicleInfoDiv.innerHTML = `<div class="error">Error looking up vehicle: ${error.message}. The DVLA API may require additional authentication steps.</div>`;
+                vehicleInfoDiv.innerHTML = `<div class="error">Error looking up vehicle: ${error.message}</div>`;
             }
         }
 
