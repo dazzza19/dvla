@@ -1,11 +1,9 @@
 [build]
-  publish = "public"
-  command = "echo 'Build complete'"
+  command = "npm install"
+  publish = "."
 
 [build.environment]
-  # These will be set in Netlify UI
-  # DVLA_API_KEY = ""
-  # DVLA_TEST_API_KEY = ""
+  # Your environment variables
 
 [[redirects]]
   from = "/api/*"
