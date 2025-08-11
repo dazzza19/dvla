@@ -744,4 +744,36 @@
         }
 
         // Initialize the application
-        window.addEventListener('load', function()
+        window.addEventListener('load', function() {
+            // Check for saved API key
+            const savedApiKey = localStorage.getItem('dvlaApiKey');
+            if (savedApiKey) {
+                dvlaApiKey = savedApiKey;
+                document.getElementById('dvlaApiKey').value = savedApiKey;
+                document.getElementById('apiStatus').innerHTML = `
+                    <div class="api-status connected">
+                        ✅ API Key Loaded from Storage
+                        <br><small>Ready for vehicle lookups.</small>
+                    </div>
+                `;
+            }
+            
+            // Check for environment variables
+            checkEnvironmentVariables();
+            
+            console.log('Virtual Mechanic Tool Loaded');
+        });
+
+        /* 
+        FOR NETLIFY/GITHUB DEPLOYMENT:
+        Add these environment variables to your build settings:
+        
+        DVLA_API_KEY=your_actual_api_key_here
+        DVLA_API_URL=https://driver-vehicle-licensing.api.gov.uk
+        
+        Then modify your build process to inject them into the HTML:
+        
+        1. Create a build script that replaces placeholders in this HTML
+        2. Or use Netlify Functions to handle API calls server-side
+        3. Example: Replace 'DVLA_API_KEY_PLACEHOLDER' with process.env.DVLA_API_KEY
+        */
